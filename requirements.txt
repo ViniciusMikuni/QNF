@@ -1,0 +1,4 @@
+h5py==3.7.0
+numpy==1.23.5
+tensorflow==2.9.0
+tensorflow_probability==0.17.0
