@@ -20,16 +20,16 @@ if __name__ == "__main__":
 
     e,layer_energies = methods.DataLoaderCaloGAN(flags.data_folder)
     model,dist = methods.MADE(e.shape[1],layer_energies.shape[1])
-    batch_size = 100
+    batch_size = 1024
     myhistory = model.fit([e,layer_energies],
                           y=np.ones((len(e),0), dtype=np.float32), #dummy labels 
                           batch_size=batch_size,
-                          epochs=1,
+                          epochs=100,
                           verbose = 1)
 
-    print(dist.bijector.forward([1.0],conditional_input= [0.0,0.0,0.0]).numpy())
-    print(dist.log_prob([0.5],bijector_kwargs={'conditional_input': [0.0,0.0,0.0]}))
-    input()
+    # print(dist.bijector.forward([1.0],conditional_input= [0.0,0.0,0.0]).numpy())
+    # print(dist.log_prob([0.5],bijector_kwargs={'conditional_input': [0.0,0.0,0.0]}))
+
 
     
     

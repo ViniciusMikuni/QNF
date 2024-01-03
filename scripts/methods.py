@@ -8,12 +8,16 @@ tfd = tfp.distributions
 tfb = tfp.bijectors
 
 
-def _network(data_shape,cond_shape):
+def _network(data_shape,cond_shape=None):
+    if cond_shape is None:
+        is_cond = False
+    else:
+        is_cond = True
     made = tfb.AutoregressiveNetwork(params=2, 
                                      hidden_units=[32,32], 
                                      event_shape=data_shape,
-                                     activation='leaky_relu',
-                                     conditional=True,
+                                     activation='gelu',
+                                     conditional=is_cond,
                                      conditional_event_shape=cond_shape,
                                     )
     return made
@@ -28,6 +32,27 @@ def make_bijector_kwargs(bijector, name_to_kwargs):
                 return kwargs
     return {}
 
+def MADE_no_cond(data_shape,ntransform=8):
+    # Density estimation with MADE.
+    
+    bijectors = []
+    for i in range(ntransform):        
+        bijectors.append(tfb.MaskedAutoregressiveFlow(_network(data_shape)))
+    chain = tfb.Chain(bijectors)
+    distribution = tfd.TransformedDistribution(
+        distribution=tfd.Sample(tfd.Normal(loc=0., scale=1.), sample_shape=[data_shape]),
+        bijector=chain)
+
+    # Construct and fit model.
+    x_ = keras.layers.Input(shape=(data_shape,), dtype=tf.float32)
+    logprob_ = distribution.log_prob(x_)
+    model = keras.Model(x_, logprob_)
+
+    model.compile(optimizer=tf.optimizers.Adam(learning_rate=5e-4),loss=lambda _, log_prob: -log_prob)
+    
+    return model, distribution
+
+
 def MADE(data_shape, cond_shape,ntransform=8):
     # Density estimation with MADE.
     
@@ -36,7 +61,6 @@ def MADE(data_shape, cond_shape,ntransform=8):
         bijectors.append(tfb.MaskedAutoregressiveFlow(_network(data_shape,cond_shape),name='made{}'.format(i)))
     chain = tfb.Chain(bijectors)
     distribution = tfd.TransformedDistribution(
-        #distribution=tfd.Sample(tfd.Uniform(), sample_shape=[data_shape]),
         distribution=tfd.Sample(tfd.Normal(loc=0., scale=1.), sample_shape=[data_shape]),
         bijector=chain)
 
@@ -51,6 +75,15 @@ def MADE(data_shape, cond_shape,ntransform=8):
     model.compile(optimizer=tf.optimizers.Adam(learning_rate=5e-4),loss=lambda _, log_prob: -log_prob)
     
     return model, distribution
+
+def logit(x,alpha=1e-6):
+    x = alpha + (1 - 2*alpha)*x
+    return np.ma.log(x/(1-x)).filled(0)
+
+def revert_logit(x,alpha=1e-6):
+    exp = np.exp(x)
+    x = exp/(1+exp)
+    return (x-alpha)/(1 - 2*alpha)   
 
 def DataLoaderCaloGAN(file_name,nevts=-1):
     '''
@@ -74,4 +107,4 @@ def DataLoaderCaloGAN(file_name,nevts=-1):
     layer_energies = [np.sum(layer,(1,2)) for layer in [layer0,layer1,layer2]]
     layer_energies = np.transpose(layer_energies)
 
-    return e/100.,np.ma.log(layer_energies/e + 1.0).filled(0)
+    return e/100.,np.ma.log(layer_energies/100 + 1.0).filled(0)
